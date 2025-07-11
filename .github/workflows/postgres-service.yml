@@ -1,0 +1,38 @@
+name: PostgreSQL Service Check
+
+on:
+  push:
+
+jobs:
+  test-postgres-service:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:11
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd="pg_isready -U testuser"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+    - name: Wait for PostgreSQL to be ready
+      run: |
+        echo "Waiting for PostgreSQL to be ready on port 5432..."
+        for i in {1..30}; do
+          nc -z localhost 5432 && echo "PostgreSQL is up!" && exit 0
+          echo "Waiting... ($i)"
+          sleep 1
+        done
+        echo "PostgreSQL service did not become ready in time."
+        exit 1
+
+    - name: Output success message
+      run: echo "✅ PostgreSQL service is running and accessible!"
