@@ -1,71 +1,45 @@
-name: PostgreSQL Service Test
+name: PostgreSQL Service Demo
 
 on:
-  workflow_dispatch: # Allows manual triggering of the workflow
+  push:
+    paths:
+      - '.github/workflows/postgres-service.yml'
 
 jobs:
-  test-postgres-service:
+  test-postgres:
     runs-on: ubuntu-latest
 
     services:
       postgres:
         image: postgres:11
         env:
-          POSTGRES_USER: user
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: mydatabase
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: testdb
         ports:
-          - 5432:5432 # Expose port 5432 from the container to the host
+          - 5432:5432
         options: >-
-          --health-cmd pg_isready -U user -d mydatabase
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd="pg_isready -U testuser"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Wait for PostgreSQL service to be ready
+      - name: Wait for PostgreSQL to be ready
         run: |
-          echo "Waiting for PostgreSQL service to be ready..."
-          max_attempts=60 # Wait for up to 60 seconds (60 * 1 second sleep)
-          attempt_num=0
-          while ! nc -z localhost 5432; do
-            if [ $attempt_num -ge $max_attempts ]; then
-              echo "Error: PostgreSQL service did not become ready within $max_attempts seconds."
-              exit 1
+          echo "Waiting for PostgreSQL to be ready on port 5432..."
+          for i in {1..30}; do
+            if nc -z localhost 5432; then
+              echo "PostgreSQL is up!"
+              exit 0
             fi
-            echo "PostgreSQL not yet ready, waiting 1 second... (attempt $((attempt_num + 1)) of $max_attempts)"
+            echo "Waiting... ($i)"
             sleep 1
-            attempt_num=$((attempt_num + 1))
           done
-          echo "PostgreSQL service is ready and listening on port 5432."
-        shell: bash
+          echo "PostgreSQL failed to start in time."
+          exit 1
 
-      - name: Confirm PostgreSQL service is running and accessible
-        # Define environment variables specifically for this step
-        env:
-          PGPASSWORD: ${{ services.postgres.env.POSTGRES_PASSWORD }}
-          PGUSER: ${{ services.postgres.env.POSTGRES_USER }}
-          PGDATABASE: ${{ services.postgres.env.POSTGRES_DB }}
+      - name: Confirm PostgreSQL service is accessible
         run: |
-          echo "Attempting to connect to PostgreSQL and execute a query..."
-          # Install postgresql-client to use psql
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
-
-          # Connect using psql and run a simple query
-          # PGPASSWORD, PGUSER, PGDATABASE are now available as environment variables
-          psql \
-            -h localhost \
-            -p 5432 \
-            -c "SELECT 1 as postgres_status;"
-
-          if [ $? -eq 0 ]; then
-            echo "Successfully connected to PostgreSQL and executed a query. PostgreSQL service is fully functional!"
-          else
-            echo "Failed to connect to PostgreSQL or execute a query. Check service logs."
-            exit 1
-          fi
-        shell: bash
+          sudo apt-get update && sudo apt-get install -y postgresql-client
+          PGPASSWORD=testpassword psql -h localhost -U testuser -d testdb -c '\l'
