@@ -16,7 +16,6 @@ jobs:
           POSTGRES_DB: mydatabase
         ports:
           - 5432:5432 # Expose port 5432 from the container to the host
-        # Optional: Docker's internal health check (useful for service orchestration, but job still needs its own wait)
         options: >-
           --health-cmd pg_isready -U user -d mydatabase
           --health-interval 5s
@@ -45,6 +44,11 @@ jobs:
         shell: bash
 
       - name: Confirm PostgreSQL service is running and accessible
+        # Define environment variables specifically for this step
+        env:
+          PGPASSWORD: ${{ services.postgres.env.POSTGRES_PASSWORD }}
+          PGUSER: ${{ services.postgres.env.POSTGRES_USER }}
+          PGDATABASE: ${{ services.postgres.env.POSTGRES_DB }}
         run: |
           echo "Attempting to connect to PostgreSQL and execute a query..."
           # Install postgresql-client to use psql
@@ -52,12 +56,10 @@ jobs:
           sudo apt-get install -y postgresql-client
 
           # Connect using psql and run a simple query
-          # PGPASSWORD is used to pass the password non-interactively
-          PGPASSWORD=${{ services.postgres.env.POSTGRES_PASSWORD }} psql \
+          # PGPASSWORD, PGUSER, PGDATABASE are now available as environment variables
+          psql \
             -h localhost \
             -p 5432 \
-            -U ${{ services.postgres.env.POSTGRES_USER }} \
-            -d ${{ services.postgres.env.POSTGRES_DB }} \
             -c "SELECT 1 as postgres_status;"
 
           if [ $? -eq 0 ]; then
