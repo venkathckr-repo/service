@@ -1,4 +1,4 @@
-name: PostgreSQL Service Demo
+name: PostgreSQL Service With Readiness Check
 
 on:
   push:
@@ -20,26 +20,33 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd="pg_isready -U testuser"
-          --health-interval=10s
+          --health-interval=5s
           --health-timeout=5s
-          --health-retries=5
+          --health-retries=10
 
     steps:
-      - name: Wait for PostgreSQL to be ready
-        run: |
-          echo "Waiting for PostgreSQL to be ready on port 5432..."
-          for i in {1..30}; do
-            if nc -z localhost 5432; then
-              echo "PostgreSQL is up!"
-              exit 0
-            fi
-            echo "Waiting... ($i)"
-            sleep 1
-          done
-          echo "PostgreSQL failed to start in time."
-          exit 1
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Confirm PostgreSQL service is accessible
+      - name: Wait for PostgreSQL to be ready using pg_isready
         run: |
-          sudo apt-get update && sudo apt-get install -y postgresql-client
-          PGPASSWORD=testpassword psql -h localhost -U testuser -d testdb -c '\l'
+          echo "Waiting for PostgreSQL to be ready..."
+          for i in {1..30}; do
+            pg_isready -h localhost -p 5432 -U testuser
+            if [ $? -eq 0 ]; then
+              echo "PostgreSQL is ready!"
+              break
+            fi
+            echo "Still waiting... ($i)"
+            sleep 1
+            if [ $i -eq 30 ]; then
+              echo "PostgreSQL didn't become ready in time."
+              exit 1
+            fi
+          done
+
+      - name: Confirm PostgreSQL connection with psql
+        env:
+          PGPASSWORD: testpassword
+        run: |
+          psql -h localhost -U testuser -d testdb -c '\l'
