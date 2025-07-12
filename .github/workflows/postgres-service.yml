@@ -28,22 +28,14 @@ jobs:
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Wait for PostgreSQL to be ready using pg_isready
+
+      - name: Wait for PostgreSQL to be ready
         run: |
-          echo "Waiting for PostgreSQL to be ready..."
-          for i in {1..30}; do
-            pg_isready -h localhost -p 5432 -U testuser
-            if [ $? -eq 0 ]; then
-              echo "PostgreSQL is ready!"
-              break
-            fi
-            echo "Still waiting... ($i)"
+          echo "Waiting for PostgreSQL..."
+          while ! nc -z localhost 5432; do   
             sleep 1
-            if [ $i -eq 30 ]; then
-              echo "PostgreSQL didn't become ready in time."
-              exit 1
-            fi
           done
+          echo "PostgreSQL is ready!"
 
       - name: Confirm PostgreSQL connection with psql
         env:
