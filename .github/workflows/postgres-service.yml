@@ -1,7 +1,7 @@
-name: PostgreSQL Service Check
+name: PostgreSQL Service Test
 
 on:
-  push:
+  workflow_dispatch: # Allows manual triggering of the workflow
 
 jobs:
   test-postgres-service:
@@ -11,28 +11,36 @@ jobs:
       postgres:
         image: postgres:11
         env:
-          POSTGRES_USER: testuser
-          POSTGRES_PASSWORD: testpass
-          POSTGRES_DB: testdb
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: mydatabase
         ports:
-          - 5432:5432
+          - 5432:5432 # Expose port 5432 from the container to the host
         options: >-
-          --health-cmd="pg_isready -U testuser"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
-    - name: Wait for PostgreSQL to be ready
-      run: |
-        echo "Waiting for PostgreSQL to be ready on host 'postgres'..."
-        for i in {1..30}; do
-          pg_isready -h postgres -U testuser && echo "PostgreSQL is ready!" && exit 0
-          echo "Waiting... ($i)"
-          sleep 1
-        done
-        echo "PostgreSQL service did not become ready in time."
-        exit 1
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Output success message
-      run: echo "✅ PostgreSQL service is running and accessible!"
+      - name: Wait for PostgreSQL service to be ready
+        run: |
+          echo "Waiting for PostgreSQL service to be ready..."
+          for i in `seq 1 10`; do
+            nc -z localhost 5432 && break
+            echo "PostgreSQL not yet ready, waiting 1 second..."
+            sleep 1
+          done
+          nc -z localhost 5432 || (echo "PostgreSQL service did not become ready." && exit 1)
+        shell: bash
+
+      - name: Confirm PostgreSQL service is running
+        run: |
+          echo "PostgreSQL service is running successfully on localhost:5432!"
+          # You can add further steps here to interact with the database, e.g., connect with psql
+          # For example:
+          # sudo apt-get update && sudo apt-get install -y postgresql-client
+          # PGPASSWORD=password psql -h localhost -p 5432 -U user -d mydatabase -c "SELECT 1;"
